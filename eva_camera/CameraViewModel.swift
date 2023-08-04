@@ -13,8 +13,8 @@ import Photos
 class CameraViewModel: NSObject {
     
     var captureSession: AVCaptureSession = AVCaptureSession()
-    private var currentDevice: AVCaptureDevice?
-    private var videoOutput: AVCaptureMovieFileOutput?
+    private var currentDevice: AVCaptureDevice!
+    private var videoOutput: AVCaptureMovieFileOutput!
     
     private var photoCompletion: ((Result<UIImage, Error>) -> Void)?
     private var videoCompletion: ((Result<URL, Error>) -> Void)?
@@ -80,7 +80,7 @@ class CameraViewModel: NSObject {
         }
     }
     
-    func capturePhoto(completion: @escaping (Result<UIImage, Error>) -> Void) {
+    func takePhoto(completion: @escaping (Result<UIImage, Error>) -> Void) {
            guard let captureOutput = captureSession.outputs.first as? AVCapturePhotoOutput else {
                completion(.failure(NSError(domain: "Capture session not set up properly.", code: -1, userInfo: nil)))
                return
@@ -106,6 +106,13 @@ class CameraViewModel: NSObject {
             videoOutput.startRecording(to: outputURL, recordingDelegate: self)
             self.videoCompletion = completion
         }
+    
+    func stopRecording(completion: @escaping (Error?) -> Void) {
+        guard self.captureSession.isRunning else {
+            return
+        }
+        self.videoOutput.stopRecording()
+    }
 
         private func getOutputURL() -> URL {
             let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -114,18 +121,6 @@ class CameraViewModel: NSObject {
             try? FileManager.default.removeItem(at: outputURL)
             return outputURL
         }
-
-        
-        func stopRecordingVideo(completion: @escaping (Result<URL, Error>) -> Void) {
-            guard let videoOutput = videoOutput else {
-                completion(.failure(NSError(domain: "Capture session not set up properly.", code: -1, userInfo: nil)))
-                return
-            }
-            
-            videoOutput.stopRecording()
-            self.videoCompletion = completion
-        }
-    
     }
 
 extension CameraViewModel: AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate  {

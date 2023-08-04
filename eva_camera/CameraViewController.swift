@@ -63,14 +63,13 @@ class CameraViewController: UIViewController, CameraButtonDelegate {
     
     func didTap(_ button: CameraButton) {
         if !button.isRecording {
-            
-            viewModel.startRecordingVideo { [weak self] result in
+            viewModel.takePhoto { [weak self] result  in
+                
                 guard let self = self else { return }
                 
                 switch result {
                 case .success:
-                    print("Recording started successfully.")
-                    let alertController = UIAlertController(title: "Your video was successfully saved", message: nil, preferredStyle: .alert)
+                    let alertController = UIAlertController(title: "Your photo was successfully saved", message: nil, preferredStyle: .alert)
                     let defaultAction = UIAlertAction(title: "OK", style: .default, handler: nil)
                     alertController.addAction(defaultAction)
                     DispatchQueue.main.async {
@@ -79,19 +78,30 @@ class CameraViewController: UIViewController, CameraButtonDelegate {
                 case .failure(let error):
                     print("Error starting recording: \(error.localizedDescription)")
                 }
+                
             }
             
+            
         } else if button.isRecording {
-            viewModel.stopRecordingVideo { [weak self] result in
+            button.start()
+            
+            viewModel.startRecordingVideo { [weak self] result in
                 guard let self = self else { return }
                 
                 switch result {
-                case .success(let url):
-                    print("Recording stopped successfully.")
-                    
+                case .success:
+                    button.stop()
+                    viewModel.stopRecording { error in
+                        print("Error stoping recording: \(String(describing: error?.localizedDescription))")
+                    }
+                    let alertController = UIAlertController(title: "Your video was successfully saved", message: nil, preferredStyle: .alert)
+                    let defaultAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+                    alertController.addAction(defaultAction)
+                    DispatchQueue.main.async {
+                        self.present(alertController, animated: true, completion: nil)
+                    }
                 case .failure(let error):
-                    print("Error stopping recording: \(error.localizedDescription)")
-                    
+                    print("Error starting recording: \(error.localizedDescription)")
                 }
             }
         }
