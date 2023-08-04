@@ -10,9 +10,9 @@ import AVFoundation
 import UIKit
 import Photos
 
-class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
+class CameraViewModel: NSObject {
     
-    var captureSession: AVCaptureSession?
+    var captureSession: AVCaptureSession = AVCaptureSession()
     private var currentDevice: AVCaptureDevice?
     private var videoOutput: AVCaptureMovieFileOutput?
     
@@ -20,9 +20,6 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
     private var videoCompletion: ((Result<URL, Error>) -> Void)?
     
     func setupCaptureSession(for view: UIView) {
-        captureSession = AVCaptureSession()
-        
-        guard let captureSession = captureSession else { return }
         
         captureSession.sessionPreset = .high
         
@@ -53,7 +50,7 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
             view.layer.addSublayer(previewLayer)
             
             DispatchQueue.global(qos: .background).async {
-                captureSession.startRunning()
+                self.captureSession.startRunning()
             }
             
         } catch {
@@ -62,7 +59,6 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
     }
     
     func switchCamera() {
-        guard let captureSession = captureSession else { return }
         
         if let currentInput = captureSession.inputs.first {
             captureSession.removeInput(currentInput)
@@ -85,8 +81,7 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
     }
     
     func capturePhoto(completion: @escaping (Result<UIImage, Error>) -> Void) {
-           guard let captureSession = captureSession,
-                 let captureOutput = captureSession.outputs.first as? AVCapturePhotoOutput else {
+           guard let captureOutput = captureSession.outputs.first as? AVCapturePhotoOutput else {
                completion(.failure(NSError(domain: "Capture session not set up properly.", code: -1, userInfo: nil)))
                return
            }
@@ -111,53 +106,15 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
             videoOutput.startRecording(to: outputURL, recordingDelegate: self)
             self.videoCompletion = completion
         }
-    
-    func photoOutput(_ output: AVCapturePhotoOutput,
-                         didFinishProcessingPhoto photo: AVCapturePhoto,
-                         error: Error?) {
-            if let error = error {
-                photoCompletion?(.failure(error))
-                return
-            }
 
-            if let imageData = photo.fileDataRepresentation(),
-               let image = UIImage(data: imageData) {
-                photoCompletion?(.success(image))
-            } else {
-                photoCompletion?(.failure(NSError(domain: "Error converting photo data to UIImage.", code: -1, userInfo: nil)))
-            }
-        }
-        
-        
-        func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-            if let error = error {
-                videoCompletion?(.failure(error))
-                return
-            }
-            
-            videoCompletion?(.success(outputFileURL))
-        }
-        
         private func getOutputURL() -> URL {
-            let tempDir = NSTemporaryDirectory()
-            let fileName = "video_\(Date().timeIntervalSince1970).mov"
-            let outputURL = URL(fileURLWithPath: tempDir).appendingPathComponent(fileName)
+            let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            let id = Int.random(in: 0...1000)
+            let outputURL = paths[0].appendingPathComponent("\(id).mp4")
+            try? FileManager.default.removeItem(at: outputURL)
             return outputURL
         }
-        
-        func savePhotoToGallery(image: UIImage) {
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
-            }) { success, error in
-                if success {
-                    print("Photo saved to gallery successfully.")
-                } else if let error = error {
-                    print("Error saving photo to gallery: \(error)")
-                } else {
-                    print("Unknown error while saving photo to gallery.")
-                }
-            }
-        }
+
         
         func stopRecordingVideo(completion: @escaping (Result<URL, Error>) -> Void) {
             guard let videoOutput = videoOutput else {
@@ -168,18 +125,39 @@ class CameraViewModel: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOut
             videoOutput.stopRecording()
             self.videoCompletion = completion
         }
-        
-        func saveVideoToGallery(videoURL: URL) {
+    
+    }
+
+extension CameraViewModel: AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate  {
+    
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        if error == nil {
             PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
-            }) { success, error in
-                if success {
-                    print("Video saved to gallery successfully.")
-                } else if let error = error {
-                    print("Error saving video to gallery: \(error)")
-                } else {
-                    print("Unknown error while saving video to gallery.")
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: outputFileURL)
+            }) { saved, error in
+                if saved {
+                 //
                 }
             }
+        } else {
         }
     }
+    
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard error == nil else {
+            return
+        }
+        
+        guard let imageData = photo.fileDataRepresentation() else {
+            return
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let image = UIImage(data: imageData) else { return }
+            UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        }
+    }
+    
+}

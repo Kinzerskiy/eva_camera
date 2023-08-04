@@ -22,24 +22,20 @@ class CameraViewController: UIViewController, CameraButtonDelegate {
         super.viewDidLoad()
         
         setupCameraPreview()
-        viewModel.setupCaptureSession(for: cameraPreviewView)
         prepareUI()
     }
     
-
-    
     
     func setupCameraPreview() {
-        guard let captureSession = viewModel.captureSession else {
-            return
-        }
-
-        let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer.videoGravity = .resizeAspectFill
-        previewLayer.frame = cameraPreviewView.bounds
-        cameraPreviewView.layer.addSublayer(previewLayer)
+        viewModel.setupCaptureSession(for: cameraPreviewView)
     }
-
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        cameraPreviewView.frame = self.view.frame
+    }
+    
     
     func prepareUI() {
         button.delegate = self
@@ -63,46 +59,46 @@ class CameraViewController: UIViewController, CameraButtonDelegate {
         cameraSwitchButton.tintColor = .black
     }
     
+    
+    
     func didTap(_ button: CameraButton) {
         if !button.isRecording {
-            button.stop()
-            viewModel.capturePhoto { (result: Result<UIImage, Error>) in
+            
+            viewModel.startRecordingVideo { [weak self] result in
+                guard let self = self else { return }
+                
                 switch result {
-                case .success(let image):
-                    self.viewModel.savePhotoToGallery(image: image)
+                case .success:
+                    print("Recording started successfully.")
+                    let alertController = UIAlertController(title: "Your video was successfully saved", message: nil, preferredStyle: .alert)
+                    let defaultAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+                    alertController.addAction(defaultAction)
+                    DispatchQueue.main.async {
+                        self.present(alertController, animated: true, completion: nil)
+                    }
                 case .failure(let error):
-                    print("Error capturing photo: \(error)")
+                    print("Error starting recording: \(error.localizedDescription)")
                 }
             }
+            
         } else if button.isRecording {
-            button.start()
-            viewModel.startRecordingVideo { (result: Result<URL, Error>) in
+            viewModel.stopRecordingVideo { [weak self] result in
+                guard let self = self else { return }
+                
                 switch result {
                 case .success(let url):
-                    self.viewModel.saveVideoToGallery(videoURL: url)
+                    print("Recording stopped successfully.")
+                    
                 case .failure(let error):
-                    print("Error recording video: \(error)")
+                    print("Error stopping recording: \(error.localizedDescription)")
+                    
                 }
             }
         }
     }
-    
-    func didRelease(_ button: CameraButton) {
-        if button.isRecording {
-            viewModel.stopRecordingVideo { [weak self] (result: Result<URL, Error>) in
-                switch result {
-                case .success(let url):
-                    self?.viewModel.saveVideoToGallery(videoURL: url)
-                case .failure(let error):
-                    print("Error stopping video recording: \(error)")
-                }
-            }
-        }
-    }
-    
     
     func didFinishProgress() {
-        didRelease(button)
+      
     }
     
     @IBAction func switchCameraAction(_ sender: Any) {
